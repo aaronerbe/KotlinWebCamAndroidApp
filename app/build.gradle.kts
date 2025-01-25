@@ -41,6 +41,8 @@ android {
 }
 
 dependencies {
+//for location
+    implementation(libs.play.services.location)
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)

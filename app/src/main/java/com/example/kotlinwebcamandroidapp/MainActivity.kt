@@ -1,6 +1,5 @@
 // MainActivity.kt
 package com.example.kotlinwebcamandroidapp
-
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
@@ -20,35 +19,54 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
-
+//Needed to allow internet activity
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
+//Location Services
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.FusedLocationProviderClient
+//??
+import android.location.Location
+import android.widget.Toast
+import androidx.activity.compose.setContent
+import androidx.core.app.ActivityCompat
+
 
 class MainActivity : ComponentActivity() {
+    private lateinit var fusedLocationClient: FusedLocationProviderClient
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Initialize FusedLocationProviderClient
+        fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
+        // Run main app
         setContent {
-            WebCamApp()
+            WebCamApp(
+                getUserLocation = { onLocationReady ->
+                    checkLocationPermission(onLocationReady)
+                }
+            )
         }
-        checkLocationPermission()
     }
-    private fun checkLocationPermission() {
+
+    private fun checkLocationPermission(onLocationReady: (Double, Double) -> Unit) {
         val fineLocationPermission = Manifest.permission.ACCESS_FINE_LOCATION
         val coarseLocationPermission = Manifest.permission.ACCESS_COARSE_LOCATION
 
         when {
-            // Check if permissions are already granted
-            ContextCompat.checkSelfPermission(this, fineLocationPermission) == PackageManager.PERMISSION_GRANTED &&
+            // If permissions are already granted
+            ContextCompat.checkSelfPermission(this, fineLocationPermission) == PackageManager.PERMISSION_GRANTED ||
                     ContextCompat.checkSelfPermission(this, coarseLocationPermission) == PackageManager.PERMISSION_GRANTED -> {
-                // Permissions already granted
-                getUserLocation()
+                fetchUserLocation(onLocationReady)
             }
 
-            // Request permissions
+            // If permissions are not granted, request them
             else -> {
-                requestPermissionsLauncher.launch(arrayOf(fineLocationPermission, coarseLocationPermission))
+                requestPermissionsLauncher.launch(
+                    arrayOf(fineLocationPermission, coarseLocationPermission)
+                )
             }
         }
     }
@@ -57,18 +75,40 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true) {
-            // Permissions granted
-            getUserLocation()
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        ) {
+            println("Permissions granted")
         } else {
-            // Permissions denied
-            println("Location permission denied")
+            Toast.makeText(this, "Location permissions denied", Toast.LENGTH_SHORT).show()
         }
     }
 
-    private fun getUserLocation() {
-        // Logic to retrieve the user's location
-        println("Fetching user location...")
+    private fun fetchUserLocation(onLocationReady: (Double, Double) -> Unit) {
+        if (ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_FINE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
+                this,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+
+        fusedLocationClient.lastLocation
+            .addOnSuccessListener { location: Location? ->
+                if (location != null) {
+                    val userLat = location.latitude
+                    val userLon = location.longitude
+                    println("Latitude: $userLat, Longitude: $userLon")
+                    onLocationReady(userLat, userLon)
+                } else {
+                    println("Unable to fetch location. Try again later.")
+                }
+            }
+            .addOnFailureListener { exception ->
+                println("Error retrieving location: ${exception.message}")
+            }
     }
 }
 
@@ -79,18 +119,19 @@ fun buildData(lat: Double, lon: Double): WebCams = runBlocking {
 }
 
 @Composable
-fun WebCamApp() {
+fun WebCamApp(getUserLocation: (onLocationReady: (Double, Double) -> Unit) -> Unit) {
     var currentScreen by remember { mutableStateOf<WebCamState>(WebCamState.LocationInput) }
 
     when (val state = currentScreen) {
         is WebCamState.LocationInput -> {
             LocationInputScreen(
+                getUserLocation = getUserLocation,
                 onLocationSubmit = { lat, lon ->
                     CoroutineScope(Dispatchers.IO).launch {
                         val webCams = buildData(lat, lon)
-                        val webcamsList = webCams.getWebcams() // Get list of webcams
+                        val webcamsList = webCams.getWebcams()
                         withContext(Dispatchers.Main) {
-                            currentScreen = WebCamState.List(webcamsList) // Transition to List state
+                            currentScreen = WebCamState.List(webcamsList)
                         }
                     }
                 }
@@ -100,8 +141,7 @@ fun WebCamApp() {
             WebCamListScreen(
                 webcams = state.webcams,
                 onWebCamSelected = { id ->
-                    // Use an explicitly named parameter for clarity
-                    val selectedWebCam = state.webcams.firstOrNull { webcam: WebCam-> webcam.webcamId == id }
+                    val selectedWebCam = state.webcams.firstOrNull { webcam: WebCam -> webcam.webcamId == id }
                     selectedWebCam?.let {
                         currentScreen = WebCamState.Detail(selectedWebCam, state.webcams)
                     }
@@ -120,7 +160,10 @@ fun WebCamApp() {
 }
 
 @Composable
-fun LocationInputScreen(onLocationSubmit: (Double, Double) -> Unit) {
+fun LocationInputScreen(
+    getUserLocation: (onLocationReady: (Double, Double) -> Unit) -> Unit,
+    onLocationSubmit: (Double, Double) -> Unit
+) {
     var lat by remember { mutableStateOf("") }
     var lon by remember { mutableStateOf("") }
     var isLatError by remember { mutableStateOf(false) }
@@ -132,13 +175,27 @@ fun LocationInputScreen(onLocationSubmit: (Double, Double) -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.Center
     ) {
+        Button(
+            onClick = {
+                getUserLocation { fetchedLat, fetchedLon ->
+                    lat = fetchedLat.toString()
+                    lon = fetchedLon.toString()
+                    println("DEBUG LOCATION INPUT:  $lat, $lon")
+                    onLocationSubmit(fetchedLat, fetchedLon)
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Use Current Location")
+        }
+
         OutlinedTextField(
             value = lat,
             onValueChange = {
                 lat = it
                 isLatError = false
             },
-            label = { Text("Latitude") },
+            label = { Text("Latitude - e.g. 43.5") },
             isError = isLatError,
             modifier = Modifier.fillMaxWidth()
         )
@@ -154,7 +211,7 @@ fun LocationInputScreen(onLocationSubmit: (Double, Double) -> Unit) {
                 lon = it
                 isLonError = false
             },
-            label = { Text("Longitude") },
+            label = { Text("Longitude - e.g. 116") },
             isError = isLonError,
             modifier = Modifier.fillMaxWidth()
         )
