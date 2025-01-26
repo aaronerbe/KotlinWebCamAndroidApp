@@ -31,7 +31,21 @@ import com.google.android.gms.location.LocationServices // Provides location ser
 import com.google.android.gms.location.FusedLocationProviderClient // Accesses the device's location
 import android.location.Location // Represents a geographical location
 import android.widget.Toast // Displays short messages to the user
+import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.core.app.ActivityCompat // Simplifies permission handling
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlin.coroutines.suspendCoroutine
+
+/**
+ * Create a data class to handle and pass around coordinates
+ */
+data class Coordinates(val latitude: Double, val longitude: Double)
 
 /**
  * MainActivity Class is the entry point of the app.
@@ -50,14 +64,17 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             // Pass the getUserLocation function to the WebCamApp
-            WebCamApp(
-                //nested lambda function
-                //whenever getUserLocation is called, it will call checkLocationPermission function and pass in onLocationReady
-                getUserLocation = { onLocationReady ->
-                    checkLocationPermission(onLocationReady)
-                }
-            )
+            WebCamApp(getCoordinates = {getCoordinates()})
         }
+    }
+
+    /**
+     * Public getter for getting coordinates
+     * Handles checking permissions, calling launcher if needed and getting coords
+     * Note:  suspend needed since it's an async call to get the coords.  Needed to avoid returning null before it was done actaully getting the coords
+     */
+    private suspend fun getCoordinates(): Coordinates? {
+        return checkLocationPermission()
     }
 
     /**
@@ -66,24 +83,23 @@ class MainActivity : ComponentActivity() {
      * If not, requests the necessary permissions using the permissions launcher
      * Input:  onLocationReady
      */
-    private fun checkLocationPermission(onLocationReady: (Double, Double) -> Unit) {
-        // Permissions required for location
+    private suspend fun checkLocationPermission(): Coordinates? {
         val fineLocationPermission = Manifest.permission.ACCESS_FINE_LOCATION
         val coarseLocationPermission = Manifest.permission.ACCESS_COARSE_LOCATION
 
-        when {
-            // Check if either FINE or COARSE location permission has been given
+        return when {
+            // Permissions are already granted
             ContextCompat.checkSelfPermission(this, fineLocationPermission) == PackageManager.PERMISSION_GRANTED ||
                     ContextCompat.checkSelfPermission(this, coarseLocationPermission) == PackageManager.PERMISSION_GRANTED -> {
-                // Permissions granted, so proceed to fetch location
-                fetchUserLocation(onLocationReady)
+                fetchUserLocation() // Fetch and return the location
             }
 
-            // If permissions are not granted, request them using permissions launcher
+            // Request permissions if not granted
             else -> {
                 requestPermissionsLauncher.launch(
-                    arrayOf(fineLocationPermission, coarseLocationPermission) // Requesting both permissions
+                    arrayOf(fineLocationPermission, coarseLocationPermission)
                 )
+                null // Permissions are being requested, return null for now
             }
         }
     }
@@ -108,40 +124,52 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Fetches the user's last known location using FusedLocationProviderClient.
-     * If successful, passes the latitude and longitude to the  callback.
+     * This function is a suspend function that can only be called within a coroutine.
+     *
+     * @return Coordinates? The user's last known coordinates or null if unavailable or permissions are missing.
      */
-    private fun fetchUserLocation(onLocationReady: (Double, Double) -> Unit) {
-        // Ensure the app has permissions to access the location
+    private suspend fun fetchUserLocation(): Coordinates? {
+        // Double Check if the app has the necessary permissions for accessing location
+        // This is necessary to make kotlin happy even though we already check for permissions.  It doesn't see that the fetch is already dependent on the check
+        //TODO look for way to clean this up and remove redundant check.
         if (ActivityCompat.checkSelfPermission(
                 this,
-                Manifest.permission.ACCESS_FINE_LOCATION
+                Manifest.permission.ACCESS_FINE_LOCATION // Fine-grained location
             ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
                 this,
-                Manifest.permission.ACCESS_COARSE_LOCATION
+                Manifest.permission.ACCESS_COARSE_LOCATION // Coarse-grained location
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            return // Exit if permissions are not granted
+            // If permissions are not granted, return null
+            return null
         }
 
-        // Attempt to fetch the last known location
-        fusedLocationClient.lastLocation
-            .addOnSuccessListener { location: Location? ->
-                if (location != null) {
-                    // Extract latitude and longitude from the Location object
-                    val userLat = location.latitude
-                    val userLon = location.longitude
-                    println("DEBUG LOCATION INPUT: Latitude: $userLat, Longitude: $userLon")
-                    onLocationReady(userLat, userLon) // Pass the location to the callback function
-                } else {
-                    // Handle the case where no location is available
-                    println("DEBUG LOCATION INPUT: Unable to fetch location.")
+        // Suspend the coroutine while waiting for the result from the FusedLocationProviderClient
+        return suspendCoroutine { continuation ->
+            // Request the last known location from the FusedLocationProviderClient
+            fusedLocationClient.lastLocation
+                .addOnSuccessListener { location: Location? ->
+                    if (location != null) {
+                        // If a location is successfully retrieved, extract latitude and longitude
+                        val userLat = location.latitude
+                        val userLon = location.longitude
+                        println("DEBUG LOCATION INPUT: Latitude: $userLat, Longitude: $userLon")
+                        // Resume the coroutine with the fetched coordinates
+                        continuation.resume(Coordinates(userLat, userLon))
+                    } else {
+                        // If no location is available, log a message and resume with null
+                        println("DEBUG LOCATION INPUT: Unable to fetch location.")
+                        continuation.resume(null)
+                    }
                 }
-            }
-            .addOnFailureListener { exception ->
-                // Handle any errors that occur while fetching the location
-                println("DEBUG LOCATION INPUT: Error retrieving location: ${exception.message}")
-            }
+                .addOnFailureListener { exception ->
+                    // If there was an error retrieving the location, log the error and resume with null
+                    println("DEBUG LOCATION INPUT: Error retrieving location: ${exception.message}")
+                    continuation.resume(null)
+                }
+        }
     }
+
 }
 
 /**
@@ -159,23 +187,18 @@ fun buildData(lat: Double, lon: Double): WebCams = runBlocking {
  * Handles screen transitions and passes the getUserLocation function to the appropriate screens.
  */
 @Composable
-fun WebCamApp(getUserLocation: (onLocationReady: (Double, Double) -> Unit) -> Unit) {
-    // State variable to track the current screen the user is on
+fun WebCamApp(getCoordinates: suspend () -> Coordinates?) {
     var currentScreen by remember { mutableStateOf<WebCamState>(WebCamState.LocationInput) }
 
-    // Use When to show the appropriate screen based on the current state
     when (val state = currentScreen) {
         is WebCamState.LocationInput -> {
-            // Render the location input screen
             LocationInputScreen(
-                getUserLocation = getUserLocation, // Pass the function to fetch user location
+                getCoordinates = getCoordinates,
                 onLocationSubmit = { lat, lon ->
-                    // Launch a coroutine to fetch webcam data for the specified location
                     CoroutineScope(Dispatchers.IO).launch {
-                        val webCams = buildData(lat, lon) // Fetch webcam data
-                        val webcamsList = webCams.getWebcams() // Get the list of webcams
+                        val webCams = buildData(lat, lon)
+                        val webcamsList = webCams.getWebcams()
                         withContext(Dispatchers.Main) {
-                            // Update the state to transition to the list screen
                             currentScreen = WebCamState.List(webcamsList)
                         }
                     }
@@ -183,25 +206,23 @@ fun WebCamApp(getUserLocation: (onLocationReady: (Double, Double) -> Unit) -> Un
             )
         }
         is WebCamState.List -> {
-            // Render the webcam list screen
             WebCamListScreen(
-                webcams = state.webcams, // Pass the list of webcams to display
+                webcams = state.webcams,
                 onWebCamSelected = { id ->
-                    // Find the selected webcam by its ID
                     val selectedWebCam = state.webcams.firstOrNull { webcam: WebCam -> webcam.webcamId == id }
                     selectedWebCam?.let {
-                        // Update the state to transition to the detail screen
                         currentScreen = WebCamState.Detail(selectedWebCam, state.webcams)
                     }
+                },
+                onBack = {
+                    currentScreen = WebCamState.LocationInput
                 }
             )
         }
         is WebCamState.Detail -> {
-            // Render the webcam detail screen
             WebCamDetailScreen(
-                webcam = state.webcam, // Pass the selected webcam details
+                webcam = state.webcam,
                 onBack = {
-                    // Update the state to return to the list screen
                     currentScreen = WebCamState.List(state.webcamList)
                 }
             )
@@ -211,7 +232,7 @@ fun WebCamApp(getUserLocation: (onLocationReady: (Double, Double) -> Unit) -> Un
 
 @Composable
 fun LocationInputScreen(
-    getUserLocation: (onLocationReady: (Double, Double) -> Unit) -> Unit, // Function to fetch user location
+    getCoordinates: suspend () -> Coordinates?, // Passed in Function from MainActivity to get user-provided coordinates
     onLocationSubmit: (Double, Double) -> Unit // Function to submit user-provided latitude and longitude
 ) {
     // State variables for latitude and longitude input fields
@@ -232,17 +253,23 @@ fun LocationInputScreen(
         // Button to fetch and use the device's current location
         Button(
             onClick = {
-                // Call the getUserLocation function and pass a callback to handle the fetched location
-                getUserLocation { fetchedLat, fetchedLon ->
-                    lat = fetchedLat.toString() // Update the latitude input field
-                    lon = fetchedLon.toString() // Update the longitude input field
-                    println("DEBUG LOCATION INPUT:  $lat, $lon") // Debug output
-                    onLocationSubmit(fetchedLat, fetchedLon) // Submit the fetched location
+                CoroutineScope(Dispatchers.IO).launch {
+                    val coords = getCoordinates() // Suspend function call
+                    withContext(Dispatchers.Main) {
+                        if (coords != null) {
+                            lat = coords.latitude.toString()
+                            lon = coords.longitude.toString()
+                            println("DEBUG LOCATION INPUT: $lat, $lon")
+                            onLocationSubmit(coords.latitude, coords.longitude)
+                        } else {
+                            println("DEBUG LOCATION INPUT: Coordinates are null or permissions denied.")
+                        }
+                    }
                 }
             },
-            modifier = Modifier.fillMaxWidth() // Make the button full-width
+            modifier = Modifier.fillMaxWidth()
         ) {
-            Text("Use Current Location") // Button label
+            Text("Use Current Location")
         }
 
         // Input field for latitude
@@ -312,17 +339,28 @@ fun LocationInputScreen(
 @Composable
 fun WebCamListScreen(
     webcams: List<WebCam>, // List of webcams to display
-    onWebCamSelected: (Long) -> Unit // Function to handle when a webcam is selected
+    onWebCamSelected: (Long) -> Unit, // Function to handle when a webcam is selected
+    onBack: () -> Unit // Function to handle back navigation
 ) {
+
     // Layout container for the webcam list
     Column(
         modifier = Modifier
             .fillMaxSize() // Fill the available screen space
             .padding(16.dp) // Add padding around the content
     ) {
+        Spacer(modifier = Modifier.height(30.dp)) // Add spacing before title
         // Title for the screen
-        Text("Available WebCams", style = MaterialTheme.typography.headlineMedium)
-
+        Text(
+            "Available WebCams",
+            style = MaterialTheme.typography.headlineMedium,
+//            modifier = Modifier.padding(top=30.dp)
+        )
+        Spacer(modifier = Modifier.height(16.dp)) // Add spacing between title and list
+        // Button to navigate back to the previous screen
+        Button(onClick = onBack) {
+            Text("Back")
+        }
         Spacer(modifier = Modifier.height(16.dp)) // Add spacing between title and list
 
         // Check if there are webcams to display
@@ -330,19 +368,41 @@ fun WebCamListScreen(
             // Show a message if the list is empty
             Text("No webcams found for the given location.", style = MaterialTheme.typography.bodyLarge)
         } else {
-            // Iterate through the list of webcams and display each one
-            webcams.forEach { webcam ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth() // Make each row full-width
-                        .padding(vertical = 8.dp) // Add vertical padding between rows
-                        .clickable { onWebCamSelected(webcam.webcamId) }, // Handle row click
-                    horizontalArrangement = Arrangement.SpaceBetween // Space out elements horizontally
-                ) {
-                    Text(webcam.title) // Display the webcam title
-                    Text("ID: ${webcam.webcamId}") // Display the webcam ID
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState()) // Enable vertical scrolling
+                    .padding(16.dp)
+            ){
+                // Iterate through the list of webcams and display each one
+                webcams.forEach { webcam ->
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth() // Make each item full-width
+                            .padding(vertical = 8.dp) // Add vertical padding between items
+                            .clip(RoundedCornerShape(20.dp)) // Apply rounded corners
+//                        .background(color = Color.LightGray) // Set the background color
+//                        .background(color = Color.Black)
+                            .background(color = Color.DarkGray)
+                            .clickable { onWebCamSelected(webcam.webcamId) } // Handle item click
+                            .padding(20.dp) // Add inner padding inside the background box
+
+                    ) {
+                        Column {
+                            Text(
+                                webcam.title,// Display the webcam title
+                                color = Color.White  //set text color
+                            )
+                            Text(
+                                "ID: ${webcam.webcamId}", // Display the webcam ID
+                                modifier = Modifier.padding(start = 16.dp), // Indent the ID text
+                                color = Color.White
+                            )
+                        }
+                    }
                 }
             }
+
         }
     }
 }
@@ -360,6 +420,8 @@ fun WebCamDetailScreen(
             .fillMaxSize() // Fill the available screen space
             .padding(16.dp) // Add padding around the content
     ) {
+        Spacer(modifier = Modifier.height(30.dp)) // Add spacing before title
+
         // Title for the screen
         Text("WebCam Details", style = MaterialTheme.typography.headlineMedium)
 
