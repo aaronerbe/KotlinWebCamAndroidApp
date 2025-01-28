@@ -31,14 +31,16 @@ import com.google.android.gms.location.LocationServices // Provides location ser
 import com.google.android.gms.location.FusedLocationProviderClient // Accesses the device's location
 import android.location.Location // Represents a geographical location
 import android.widget.Toast // Displays short messages to the user
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.app.ActivityCompat // Simplifies permission handling
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
@@ -62,9 +64,11 @@ class MainActivity : ComponentActivity() {
         // Initialize FusedLocationProviderClient for accessing location services
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
 
+        // Apply the theme to the entire app
         setContent {
-            // Pass the getUserLocation function to the WebCamApp
-            WebCamApp(getCoordinates = {getCoordinates()})
+            MyAppTheme { // Wrap the content with the custom theme
+                WebCamApp(getCoordinates = { getCoordinates() })
+            }
         }
     }
 
@@ -169,7 +173,40 @@ class MainActivity : ComponentActivity() {
                 }
         }
     }
+}
 
+/**
+ * Define a custom theme for the app with colors, shapes, and typography.
+ */
+// Define the color scheme
+val CustomColorScheme = lightColorScheme(
+    primary = Color(0xFF2191FB),       // Primary greenish
+    onPrimary = Color.White,           // Text/icon color on primary
+    secondary = Color(0xFF03DAC6),     // Secondary
+    onSecondary = Color.Black,         // Text/icon color on secondary
+    background = Color.Black,           // Background Black
+    onBackground = Color.White,        // Text color on background
+    surface = Color.DarkGray,             // Card and text field background
+    onSurface = Color.White            // Text color on surface
+)
+
+// Define custom shapes for the UI
+val CustomShapes = Shapes(
+    extraSmall = RoundedCornerShape(0.dp),  // No rounded corners
+    small = RoundedCornerShape(8.dp),    // Small rounded corner
+    medium = RoundedCornerShape(16.dp), // Medium for buttons
+    large = RoundedCornerShape(24.dp),   // Large for cards or prominent items
+)
+
+// Define the theme wrapper
+@Composable
+fun MyAppTheme(content: @Composable () -> Unit) {
+    MaterialTheme(
+        colorScheme = CustomColorScheme,
+        typography = Typography(), // Default typography
+        shapes = CustomShapes,
+        content = content
+    )
 }
 
 /**
@@ -189,6 +226,15 @@ fun buildData(lat: Double, lon: Double): WebCams = runBlocking {
 @Composable
 fun WebCamApp(getCoordinates: suspend () -> Coordinates?) {
     var currentScreen by remember { mutableStateOf<WebCamState>(WebCamState.LocationInput) }
+
+    // Handle the device back button so it goes back instead of closing app
+    BackHandler {
+        when (currentScreen) {
+            is WebCamState.List -> currentScreen = WebCamState.LocationInput // Back from List to LocationInput
+            is WebCamState.Detail -> currentScreen = WebCamState.List((currentScreen as WebCamState.Detail).webcamList) // Back from Detail to List
+            else -> {} // No action for LocationInput (let the system close the app)
+        }
+    }
 
     when (val state = currentScreen) {
         is WebCamState.LocationInput -> {
@@ -243,170 +289,214 @@ fun LocationInputScreen(
     var isLatError by remember { mutableStateOf(false) } // Flag for invalid latitude input
     var isLonError by remember { mutableStateOf(false) } // Flag for invalid longitude input
 
-    // Layout container for input fields and buttons
-    Column(
-        modifier = Modifier
-            .fillMaxSize() // Fill the available screen space
-            .padding(16.dp), // Add padding around the content
-        verticalArrangement = Arrangement.Center // Center content vertically
-    ) {
-        // Button to fetch and use the device's current location
-        Button(
-            onClick = {
-                CoroutineScope(Dispatchers.IO).launch {
-                    val coords = getCoordinates() // Suspend function call
-                    withContext(Dispatchers.Main) {
-                        if (coords != null) {
-                            lat = coords.latitude.toString()
-                            lon = coords.longitude.toString()
-                            println("DEBUG LOCATION INPUT: $lat, $lon")
-                            onLocationSubmit(coords.latitude, coords.longitude)
-                        } else {
-                            println("DEBUG LOCATION INPUT: Coordinates are null or permissions denied.")
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+        ) {
+
+        // Layout container for input fields and buttons
+        Column(
+            modifier = Modifier
+                .fillMaxSize() // Fill the available screen space
+                .padding(16.dp), // Add padding around the content
+            verticalArrangement = Arrangement.Center // Center content vertically
+        ) {
+            Text(
+                "Enter Latitude and Longitude",
+                style = MaterialTheme.typography.headlineMedium, // Apply headline style
+                color = MaterialTheme.colorScheme.onBackground,
+                textAlign = TextAlign.Center, // Center the text
+                modifier = Modifier.fillMaxWidth() // Make the text fill the available width
+                .padding(bottom = 32.dp) // Add padding below the text
+            )
+            // Button to fetch and use the device's current location
+            Button(
+                onClick = {
+                    CoroutineScope(Dispatchers.IO).launch {
+                        val coords = getCoordinates() // Suspend function call
+                        withContext(Dispatchers.Main) {
+                            if (coords != null) {
+                                lat = coords.latitude.toString()
+                                lon = coords.longitude.toString()
+                                println("DEBUG LOCATION INPUT: $lat, $lon")
+                                onLocationSubmit(coords.latitude, coords.longitude)
+                            } else {
+                                println("DEBUG LOCATION INPUT: Coordinates are null or permissions denied.")
+                            }
                         }
                     }
-                }
-            },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Use Current Location")
-        }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+                shape = MaterialTheme.shapes.large, // Use the medium shape from the theme
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary, // Use secondary color for this button
+                    contentColor = MaterialTheme.colorScheme.onSecondary // Use contrast color
+                )
+            ) {
+                Text("Use Current Location")
+            }
 
-        // Input field for latitude
-        OutlinedTextField(
-            value = lat, // Current value of the latitude input
-            onValueChange = {
-                lat = it // Update the latitude value
-                isLatError = false // Reset the error flag
-            },
-            label = { Text("Latitude - e.g. 43.5") }, // Placeholder text
-            isError = isLatError, // Highlight the field if there's an error
-            modifier = Modifier.fillMaxWidth() // Make the input field full-width
-        )
-        // Show an error message if the latitude is invalid
-        if (isLatError) {
-            Text("Invalid latitude. Must be between -90 and 90.", color = MaterialTheme.colorScheme.error)
-        }
+            // Input field for latitude
+            OutlinedTextField(
+                value = lat, // Current value of the latitude input
+                onValueChange = {
+                    lat = it // Update the latitude value
+                    isLatError = false // Reset the error flag
+                },
+                label = { Text("Latitude - e.g. 43.5") }, // Placeholder text
+                isError = isLatError, // Highlight the field if there's an error
+                modifier = Modifier.fillMaxWidth(), // Make the input field full-width
+                shape = MaterialTheme.shapes.small // Small rounded corners
 
-        Spacer(modifier = Modifier.height(16.dp)) // Add spacing between fields
+            )
+            // Show an error message if the latitude is invalid
+            if (isLatError) {
+                Text(
+                    "Invalid latitude. Must be between -90 and 90.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
 
-        // Input field for longitude
-        OutlinedTextField(
-            value = lon, // Current value of the longitude input
-            onValueChange = {
-                lon = it // Update the longitude value
-                isLonError = false // Reset the error flag
-            },
-            label = { Text("Longitude - e.g. 116") }, // Placeholder text
-            isError = isLonError, // Highlight the field if there's an error
-            modifier = Modifier.fillMaxWidth() // Make the input field full-width
-        )
-        // Show an error message if the longitude is invalid
-        if (isLonError) {
-            Text("Invalid longitude. Must be between -180 and 180.", color = MaterialTheme.colorScheme.error)
-        }
+            Spacer(modifier = Modifier.height(16.dp)) // Add spacing between fields
 
-        Spacer(modifier = Modifier.height(16.dp)) // Add spacing between fields
+            // Input field for longitude
+            OutlinedTextField(
+                value = lon, // Current value of the longitude input
+                onValueChange = {
+                    lon = it // Update the longitude value
+                    isLonError = false // Reset the error flag
+                },
+                label = { Text("Longitude - e.g. 116") }, // Placeholder text
+                isError = isLonError, // Highlight the field if there's an error
+                modifier = Modifier.fillMaxWidth(), // Make the input field full-width
+                shape = MaterialTheme.shapes.small
+            )
+            // Show an error message if the longitude is invalid
+            if (isLonError) {
+                Text(
+                    "Invalid longitude. Must be between -180 and 180.",
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
 
-        // Button to submit the latitude and longitude
-        Button(
-            onClick = {
-                val latValue = lat.toDoubleOrNull() // Convert latitude to Double
-                val lonValue = lon.toDoubleOrNull() // Convert longitude to Double
+            Spacer(modifier = Modifier.height(16.dp)) // Add spacing between fields
 
-                // Validate the latitude value
-                if (latValue == null || latValue !in -90.0..90.0) {
-                    isLatError = true
-                }
+            // Button to submit the latitude and longitude
+            Button(
+                onClick = {
+                    val latValue = lat.toDoubleOrNull() // Convert latitude to Double
+                    val lonValue = lon.toDoubleOrNull() // Convert longitude to Double
 
-                // Validate the longitude value
-                if (lonValue == null || lonValue !in -180.0..180.0) {
-                    isLonError = true
-                }
+                    // Validate the latitude value
+                    if (latValue == null || latValue !in -90.0..90.0) {
+                        isLatError = true
+                    }
 
-                // Submit the values if both are valid
-                if (!isLatError && !isLonError && latValue != null && lonValue != null) {
-                    onLocationSubmit(latValue, lonValue)
-                }
-            },
-            modifier = Modifier.fillMaxWidth() // Make the button full-width
-        ) {
-            Text("Fetch WebCams") // Button label
+                    // Validate the longitude value
+                    if (lonValue == null || lonValue !in -180.0..180.0) {
+                        isLonError = true
+                    }
+
+                    // Submit the values if both are valid
+                    if (!isLatError && !isLonError && latValue != null && lonValue != null) {
+                        onLocationSubmit(latValue, lonValue)
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary, // Use primary color
+                    contentColor = MaterialTheme.colorScheme.onPrimary // Use onPrimary for contrast
+                ),
+                modifier = Modifier.fillMaxWidth(), // Make the button full-width
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Text("Fetch WebCams") // Button label
+            }
         }
     }
 }
 
+/**
+ * Webcam List Screen
+ * Displays a scrollable list of webcams with a back button.
+ */
 @Composable
 fun WebCamListScreen(
     webcams: List<WebCam>, // List of webcams to display
     onWebCamSelected: (Long) -> Unit, // Function to handle when a webcam is selected
     onBack: () -> Unit // Function to handle back navigation
 ) {
-
-    // Layout container for the webcam list
-    Column(
-        modifier = Modifier
-            .fillMaxSize() // Fill the available screen space
-            .padding(16.dp) // Add padding around the content
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
     ) {
-        Spacer(modifier = Modifier.height(30.dp)) // Add spacing before title
-        // Title for the screen
-        Text(
-            "Available WebCams",
-            style = MaterialTheme.typography.headlineMedium,
-//            modifier = Modifier.padding(top=30.dp)
-        )
-        Spacer(modifier = Modifier.height(16.dp)) // Add spacing between title and list
-        // Button to navigate back to the previous screen
-        Button(onClick = onBack) {
-            Text("Back")
-        }
-        Spacer(modifier = Modifier.height(16.dp)) // Add spacing between title and list
+        // Layout container for the webcam list
+        Column(
+            modifier = Modifier
+                .fillMaxSize() // Fill the available screen space
+                .padding(16.dp) // Add padding around the content
+        ) {
+            Spacer(modifier = Modifier.height(62.dp))
 
-        // Check if there are webcams to display
-        if (webcams.isEmpty()) {
-            // Show a message if the list is empty
-            Text("No webcams found for the given location.", style = MaterialTheme.typography.bodyLarge)
-        } else {
+            // Title for the screen
+            Text(
+                "Available WebCams",
+                style = MaterialTheme.typography.headlineMedium, // Apply headline style
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            // Back button
+            Button(
+                onClick = onBack,
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Text("Back")
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Scrollable list of webcams
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState()) // Enable vertical scrolling
-                    .padding(16.dp)
-            ){
-                // Iterate through the list of webcams and display each one
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
                 webcams.forEach { webcam ->
                     Box(
                         modifier = Modifier
-                            .fillMaxWidth() // Make each item full-width
-                            .padding(vertical = 8.dp) // Add vertical padding between items
-                            .clip(RoundedCornerShape(20.dp)) // Apply rounded corners
-//                        .background(color = Color.LightGray) // Set the background color
-//                        .background(color = Color.Black)
-                            .background(color = Color.DarkGray)
-                            .clickable { onWebCamSelected(webcam.webcamId) } // Handle item click
-                            .padding(20.dp) // Add inner padding inside the background box
-
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp)
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(MaterialTheme.colorScheme.surface) // Surface background color
+                            .clickable { onWebCamSelected(webcam.webcamId) }
+                            .padding(16.dp) // Inner padding
                     ) {
                         Column {
                             Text(
-                                webcam.title,// Display the webcam title
-                                color = Color.White  //set text color
+                                webcam.title,
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                "ID: ${webcam.webcamId}", // Display the webcam ID
-                                modifier = Modifier.padding(start = 16.dp), // Indent the ID text
-                                color = Color.White
+                                "ID: ${webcam.webcamId}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.padding(start = 8.dp)
                             )
                         }
                     }
                 }
             }
-
         }
     }
 }
 
+/**
+ * WebCam Detail Screen
+ * Displays detailed information about a selected webcam, including title, location, and URLs.
+ * Provides navigation back to the list screen.
+ */
 @Composable
 fun WebCamDetailScreen(
     webcam: WebCam, // Webcam details to display
@@ -414,46 +504,94 @@ fun WebCamDetailScreen(
 ) {
     val context = LocalContext.current // Provides access to the current context
 
-    // Layout container for the detail view
-    Column(
-        modifier = Modifier
-            .fillMaxSize() // Fill the available screen space
-            .padding(16.dp) // Add padding around the content
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
     ) {
-        Spacer(modifier = Modifier.height(30.dp)) // Add spacing before title
+        // Layout container for the detail view
+        Column(
+            modifier = Modifier
+                .fillMaxSize() // Fill the available screen space
+                .padding(16.dp) // Add padding around the content
+        ) {
+            // Add spacing before the title
+            Spacer(modifier = Modifier.height(62.dp))
 
-        // Title for the screen
-        Text("WebCam Details", style = MaterialTheme.typography.headlineMedium)
+            // Title for the screen
+            Text(
+                "WebCam Details",
+                style = MaterialTheme.typography.headlineMedium, // Apply headline style
+                color = MaterialTheme.colorScheme.onBackground,
+            )
 
-        Spacer(modifier = Modifier.height(16.dp)) // Add spacing between title and details
+            // Add spacing between title and details
+            Spacer(modifier = Modifier.height(16.dp))
 
-        // Display webcam details
-        Text("Title: ${webcam.title}")
-        Text("Location: ${webcam.location.city}, ${webcam.location.country}")
+            // Display webcam details (title, location)
+            Text(
+                text = "Title: ${webcam.title}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground // Use appropriate contrast color
+            )
+            Text(
+                text = "Location: ${webcam.location.city}, ${webcam.location.country}",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground
+            )
 
-        Spacer(modifier = Modifier.height(16.dp)) // Add spacing between details and buttons
+            // Add spacing between details and URLs
+            Spacer(modifier = Modifier.height(16.dp))
 
-        // Button to open the Windy URL
-        TextButton(onClick = {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(webcam.urls.detail))
-            context.startActivity(intent) // Open the URL in a browser
-        }) {
-            Text("Windy URL")
-        }
+            // Button to open the Windy URL
+            Button(
+                onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(webcam.urls.detail))
+                    context.startActivity(intent) // Open the URL in a browser
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium, // Apply consistent rounded corners
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary, // Use secondary color for this button
+                    contentColor = MaterialTheme.colorScheme.onSecondary // Use contrast color
+                )
+            ) {
+                Text("Windy URL")
+            }
 
-        // Button to open the provider URL
-        TextButton(onClick = {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(webcam.urls.provider))
-            context.startActivity(intent) // Open the URL in a browser
-        }) {
-            Text("Provider URL")
-        }
+            // Add spacing between buttons
+            Spacer(modifier = Modifier.height(16.dp))
 
-        Spacer(modifier = Modifier.height(16.dp)) // Add spacing between buttons and back button
+            // Button to open the provider URL
+            Button(
+                onClick = {
+                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(webcam.urls.provider))
+                    context.startActivity(intent) // Open the URL in a browser
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.secondary,
+                    contentColor = MaterialTheme.colorScheme.onSecondary
+                )
+            ) {
+                Text("Provider URL")
+            }
 
-        // Button to navigate back to the previous screen
-        Button(onClick = onBack) {
-            Text("Back to List")
+            // Add spacing between URL buttons and the back button
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Back button to navigate back to the list screen
+            Button(
+                onClick = onBack,
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium, // Consistent rounded corners for the back button
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary, // Use primary color for the back button
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                )
+            ) {
+                Text("Back to List") // Label for the back button
+            }
         }
     }
 }
@@ -472,5 +610,18 @@ sealed class WebCamState {
         val webcamList: kotlin.collections.List<WebCam> = emptyList() // Default to an empty list
     ) : WebCamState()
 }
+
+
+@Preview(showBackground = true)
+@Composable
+fun PreviewLocationInputScreen() {
+    MaterialTheme {
+        LocationInputScreen(
+            getCoordinates = { null }, // Provide a dummy implementation for preview
+            onLocationSubmit = { _, _ -> } // Provide a no-op function for location submission
+        )
+    }
+}
+
 
 
