@@ -1,9 +1,11 @@
+package com.example.kotlinwebcamandroidapp.model
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+
 // Defines classes to represent the structure of the JSON response.
 // Each section of the JSON data is mapped to its own class.
 // Tools used: https://json2kotlin.com/ + ChatGPT for setup and organization.
 
-package com.example.kotlinwebcamandroidapp.model
-import kotlinx.serialization.Serializable
 
 // Marks the class as serializable, enabling the Kotlinx Serialization library to:
 // - ENCODE: Convert an instance of the class into a specific data format (e.g., JSON).
@@ -64,11 +66,14 @@ data class Size(                // Represents the width and height of an image.
 data class Location(            // Represents the geographical location of a webcam.
     val city: String,           // Name of the city where the webcam is located.
     val region: String,         // Name of the region or state.
-    val region_code: String,    // Geographical code for the region.
+    @SerialName("region_code")  // Geographical code for the region.
+    val regionCode: String,     // Renamed from region_code
     val country: String,        // Name of the country.
-    val country_code: String,   // Geographical code for the country.
+    @SerialName("country_code") // Geographical code for the country.
+    val countryCode: String,    // Renamed from country_code
     val continent: String,      // Name of the continent.
-    val continent_code: String, // Geographical code for the continent.
+    @SerialName("continent_code") // Geographical code for the continent.
+    val continentCode: String, // Renamed from continent_code
     val latitude: Double,       // Latitude coordinate of the webcam.
     val longitude: Double       // Longitude coordinate of the webcam.
 )

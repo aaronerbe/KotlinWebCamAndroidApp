@@ -84,9 +84,10 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Public getter for getting coordinates
+     * Getter for getting coordinates
      * Handles checking permissions, calling launcher if needed and getting coords
      * Note:  suspend needed since it's an async call to get the coords.  Needed to avoid returning null before it was done actaully getting the coords
+     * @return CheckLocationPermissions() -> Coordinates?
      */
     private suspend fun getCoordinates(): Coordinates? {
         return checkLocationPermission()
@@ -96,7 +97,7 @@ class MainActivity : ComponentActivity() {
      * Checks if location permissions are granted.
      * If granted, fetch the location.
      * If not, requests the necessary permissions using the permissions launcher
-     * Input:  onLocationReady
+     * @return fetchUserLocation() ->Coordinates? if permissions granted, null otherwise
      */
     private suspend fun checkLocationPermission(): Coordinates? {
         val fineLocationPermission = Manifest.permission.ACCESS_FINE_LOCATION
