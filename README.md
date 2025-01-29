@@ -32,7 +32,7 @@ Libraries and Dependencies
 * Material Design Components
   
 # Useful Websites
-* [Android Developer - Build location-aware apps]([http://url.link.goes.here](https://developer.android.com/develop/sensors-and-location/location))
+* [Android Developer - Build location-aware apps]([http://url.link.goes.here](https://developer.android.com/develop/sensors-and-location/location)
 * [Android Developer - Android Basics with Compose](https://developer.android.com/courses/android-basics-compose/course)
   
 
