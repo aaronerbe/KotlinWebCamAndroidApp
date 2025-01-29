@@ -34,7 +34,7 @@ import kotlinx.coroutines.withContext // Switches coroutine contexts
 import android.Manifest // For requesting location permissions
 import android.content.pm.PackageManager // For checking permission status
 import androidx.activity.result.contract.ActivityResultContracts // Manages permission requests
-import androidx.core.content.ContextCompat // Provides compatibility methods for permissions
+//import androidx.core.content.ContextCompat // Provides compatibility methods for permissions
 import androidx.core.app.ActivityCompat // For permission handling
 import com.google.android.gms.location.LocationServices // Provides location services
 import com.google.android.gms.location.FusedLocationProviderClient // Accesses the device's location
@@ -90,52 +90,8 @@ class MainActivity : ComponentActivity() {
      * @return CheckLocationPermissions() -> Coordinates?
      */
     private suspend fun getCoordinates(): Coordinates? {
-        return checkLocationPermission()
-    }
-
-    /**
-     * Checks if location permissions are granted.
-     * If granted, fetch the location.
-     * If not, requests the necessary permissions using the permissions launcher
-     * @return fetchUserLocation() ->Coordinates? if permissions granted, null otherwise
-     */
-    private suspend fun checkLocationPermission(): Coordinates? {
-        val fineLocationPermission = Manifest.permission.ACCESS_FINE_LOCATION
-        val coarseLocationPermission = Manifest.permission.ACCESS_COARSE_LOCATION
-
-        return when {
-            // Permissions are already granted
-            ContextCompat.checkSelfPermission(this, fineLocationPermission) == PackageManager.PERMISSION_GRANTED ||
-                    ContextCompat.checkSelfPermission(this, coarseLocationPermission) == PackageManager.PERMISSION_GRANTED -> {
-                fetchUserLocation() // Fetch and return the location
-            }
-
-            // Request permissions if not granted
-            else -> {
-                requestPermissionsLauncher.launch(
-                    arrayOf(fineLocationPermission, coarseLocationPermission)
-                )
-                null // Permissions are being requested, return null for now
-            }
-        }
-    }
-
-    /**
-     * Registers a permission request launcher to handle the result of permission requests.
-     * This will handle whether the user grants or denies the location permissions.
-     */
-    private val requestPermissionsLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        // Check if either FINE or COARSE location permission was granted
-        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        ) {
-            println("DEBUG LOCATION INPUT: Permissions granted")
-        } else {
-            // Notify the user that permissions were denied
-            Toast.makeText(this, "Location permissions denied", Toast.LENGTH_SHORT).show()
-        }
+//        return checkLocationPermission()
+        return fetchUserLocation()
     }
 
     /**
@@ -145,20 +101,19 @@ class MainActivity : ComponentActivity() {
      * @return Coordinates? The user's last known coordinates or null if unavailable or permissions are missing.
      */
     private suspend fun fetchUserLocation(): Coordinates? {
-        // Double Check if the app has the necessary permissions for accessing location
-        // This is necessary to make kotlin happy even though we already check for permissions.  It doesn't see that the fetch is already dependent on the check
-        //TODO look for way to clean this up and remove redundant check.
+        // Check if the app has the necessary permissions for accessing location.  Required
+        val fineLocationPermission = Manifest.permission.ACCESS_FINE_LOCATION
+        val coarseLocationPermission = Manifest.permission.ACCESS_COARSE_LOCATION
         if (ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_FINE_LOCATION // Fine-grained location
-            ) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(
-                this,
-                Manifest.permission.ACCESS_COARSE_LOCATION // Coarse-grained location
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
-            // If permissions are not granted, return null
-            return null
+                this,fineLocationPermission) != PackageManager.PERMISSION_GRANTED &&
+            ActivityCompat.checkSelfPermission(
+                this,coarseLocationPermission) != PackageManager.PERMISSION_GRANTED
+        ){
+            requestPermissionsLauncher.launch(
+            arrayOf(fineLocationPermission, coarseLocationPermission)
+            )
         }
+        //TODO work out a way to suspend operation while we open permissions launcher.  Else 1st time running it, this code returns nothing
 
         // Suspend the coroutine while waiting for the result from the FusedLocationProviderClient
         return suspendCoroutine { continuation ->
@@ -183,6 +138,26 @@ class MainActivity : ComponentActivity() {
                     println("DEBUG LOCATION INPUT: Error retrieving location: ${exception.message}")
                     continuation.resume(null)
                 }
+        }
+    }
+
+    /**
+     * Registers a permission request launcher to handle the result of permission requests.
+     * This will handle whether the user grants or denies the location permissions.
+     */
+    private val requestPermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        // Check if either FINE or COARSE location permission was granted
+        if (permissions[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            permissions[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        ) {
+            println("DEBUG LOCATION INPUT: Permissions granted")
+            Toast.makeText(this, "Permissions granted", Toast.LENGTH_SHORT).show()
+
+        } else {
+            // Notify the user that permissions were denied
+            Toast.makeText(this, "Location permissions denied", Toast.LENGTH_SHORT).show()
         }
     }
 }
