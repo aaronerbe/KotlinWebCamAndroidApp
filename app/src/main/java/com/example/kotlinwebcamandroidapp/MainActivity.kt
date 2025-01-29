@@ -1,53 +1,65 @@
 // MainActivity.kt
 package com.example.kotlinwebcamandroidapp
 
-// Imports for Android and Jetpack Compose functionality
-import android.content.Intent // For intents to open external URLs
-import android.net.Uri // For URL handling
-import android.os.Bundle // For activity lifecycle handling
-import androidx.activity.ComponentActivity // Base class for activities that use Jetpack Compose
+// Core Android Imports
+import android.content.Intent // To open external URLs
+import android.net.Uri // For handling URL
+import android.os.Bundle // Stores and transfers data between screens (activities)
+import androidx.activity.ComponentActivity // Base class for activities (screens) that use Jetpack Compose
 import androidx.activity.compose.setContent // Sets the Compose UI as the activity's content
-import androidx.compose.foundation.clickable // Enables click functionality in Composable UI
-import androidx.compose.foundation.layout.* // Provides layout tools like Column, Row, etc.
+
+// Jetpack Compose Imports
+import androidx.compose.foundation.clickable // Click functionality in Composable UI
+import androidx.compose.foundation.layout.* // Layout tools like Column, Row, etc.
 import androidx.compose.material3.* // Material Design components
 import androidx.compose.runtime.* // State management in Compose
-import androidx.compose.ui.Modifier // Modifier for UI customization
-import androidx.compose.ui.platform.LocalContext // Provides context in Composable functions
-import androidx.compose.ui.unit.dp // For specifying dimensions in density-independent pixels (dp)
-import com.example.kotlinwebcamandroidapp.data.WebCams // Data handling for webcams
-import com.example.kotlinwebcamandroidapp.model.WebCam // Data model for individual webcams
+import androidx.compose.ui.Modifier // Modifier allows customization of UI elements (size, padding, etc)
+import androidx.compose.ui.platform.LocalContext // Access apps context
+import androidx.compose.ui.unit.dp // Dimensions in density-independent pixels (dp)
+
+// App specific imports
+import com.example.kotlinwebcamandroidapp.data.WebCams // webcam data retrieval
+import com.example.kotlinwebcamandroidapp.model.WebCam // defines webcam data model
+import com.example.kotlinwebcamandroidapp.model.Coordinates // import coordinates class
+
+
+// Coroutines for async operations
 import kotlinx.coroutines.CoroutineScope // For managing coroutines
 import kotlinx.coroutines.Dispatchers // Specifies coroutine threads
 import kotlinx.coroutines.launch // Launches a coroutine
-import kotlinx.coroutines.runBlocking // Runs coroutines synchronously
+import kotlinx.coroutines.runBlocking // Runs coroutines synchronously (blocking functions)
 import kotlinx.coroutines.withContext // Switches coroutine contexts
 
-// Android permissions and compatibility imports
+// Location permissions and compatibility imports
 import android.Manifest // For requesting location permissions
 import android.content.pm.PackageManager // For checking permission status
 import androidx.activity.result.contract.ActivityResultContracts // Manages permission requests
 import androidx.core.content.ContextCompat // Provides compatibility methods for permissions
+import androidx.core.app.ActivityCompat // For permission handling
 import com.google.android.gms.location.LocationServices // Provides location services
 import com.google.android.gms.location.FusedLocationProviderClient // Accesses the device's location
-import android.location.Location // Represents a geographical location
+import android.location.Location // Represents a location
 import android.widget.Toast // Displays short messages to the user
-import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.core.app.ActivityCompat // Simplifies permission handling
-import kotlin.coroutines.resume
-import kotlin.coroutines.suspendCoroutine
 
-/**
- * Create a data class to handle and pass around coordinates
- */
-data class Coordinates(val latitude: Double, val longitude: Double)
+// Android Back Button handling
+import androidx.activity.compose.BackHandler //Allows me to customize back button so it doesn't just close the app
+
+// UI utilities
+import androidx.compose.foundation.rememberScrollState // allows scrolling
+import androidx.compose.foundation.verticalScroll  //for vertical scrolling
+import androidx.compose.foundation.background // set background color
+import androidx.compose.foundation.shape.RoundedCornerShape //rounded corners
+import androidx.compose.ui.draw.clip  // clips ui elements
+import androidx.compose.ui.graphics.Color  //ui colors
+import androidx.compose.ui.text.style.TextAlign  //align text
+
+// Previewing
+import androidx.compose.ui.tooling.preview.Preview  //for previewing composables
+
+// Coroutine Utilities
+import kotlin.coroutines.resume  //resume suspended coroutines
+import kotlin.coroutines.suspendCoroutine  //suspend execution till resumed
+
 
 /**
  * MainActivity Class is the entry point of the app.
