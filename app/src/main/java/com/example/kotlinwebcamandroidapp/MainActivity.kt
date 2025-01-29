@@ -45,12 +45,11 @@ import android.widget.Toast // Displays short messages to the user
 import androidx.activity.compose.BackHandler //Allows me to customize back button so it doesn't just close the app
 
 // UI utilities
+import com.example.kotlinwebcamandroidapp.ui.theme.KotlinWebCamAndroidAppTheme
 import androidx.compose.foundation.rememberScrollState // allows scrolling
 import androidx.compose.foundation.verticalScroll  //for vertical scrolling
 import androidx.compose.foundation.background // set background color
-import androidx.compose.foundation.shape.RoundedCornerShape //rounded corners
 import androidx.compose.ui.draw.clip  // clips ui elements
-import androidx.compose.ui.graphics.Color  //ui colors
 import androidx.compose.ui.text.style.TextAlign  //align text
 
 // Previewing
@@ -78,7 +77,7 @@ class MainActivity : ComponentActivity() {
 
         // Apply the theme to the entire app
         setContent {
-            MyAppTheme { // Wrap the content with the custom theme
+            KotlinWebCamAndroidAppTheme {
                 WebCamApp(getCoordinates = { getCoordinates() })
             }
         }
@@ -185,40 +184,6 @@ class MainActivity : ComponentActivity() {
                 }
         }
     }
-}
-
-/**
- * Define a custom theme for the app with colors, shapes, and typography.
- */
-// Define the color scheme
-val CustomColorScheme = lightColorScheme(
-    primary = Color(0xFF2191FB),       // Primary greenish
-    onPrimary = Color.White,           // Text/icon color on primary
-    secondary = Color(0xFF03DAC6),     // Secondary
-    onSecondary = Color.Black,         // Text/icon color on secondary
-    background = Color.Black,           // Background Black
-    onBackground = Color.White,        // Text color on background
-    surface = Color.DarkGray,             // Card and text field background
-    onSurface = Color.White            // Text color on surface
-)
-
-// Define custom shapes for the UI
-val CustomShapes = Shapes(
-    extraSmall = RoundedCornerShape(0.dp),  // No rounded corners
-    small = RoundedCornerShape(8.dp),    // Small rounded corner
-    medium = RoundedCornerShape(16.dp), // Medium for buttons
-    large = RoundedCornerShape(24.dp),   // Large for cards or prominent items
-)
-
-// Define the theme wrapper
-@Composable
-fun MyAppTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = CustomColorScheme,
-        typography = Typography(), // Default typography
-        shapes = CustomShapes,
-        content = content
-    )
 }
 
 /**
