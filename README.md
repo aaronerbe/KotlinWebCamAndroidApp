@@ -14,7 +14,7 @@ The user can also return back to the list by clicking the "Back to List" button.
 Purpose of building this app was to continue learning Kotlin language and begin to learn how to build Android Apps.
 
 ## Video Demo
-[Software Demo Video](http://youtube.link.goes.here)
+[Software Demo Video](https://youtu.be/_zqjLGvF2jE)
 
 # Development Environment
 
